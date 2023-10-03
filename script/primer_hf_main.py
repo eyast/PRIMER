@@ -14,6 +14,7 @@ from transformers import (
     get_linear_schedule_with_warmup,
     get_constant_schedule_with_warmup,
     LEDTokenizer,
+    LEDConfig,
     LEDForConditionalGeneration,
 )
 from dataloader import (
@@ -56,8 +57,15 @@ class PRIMERSummarizer(pl.LightningModule):
         super(PRIMERSummarizer, self).__init__()
         self.args = args
 
-        self.tokenizer = AutoTokenizer.from_pretrained(args.primer_path)
-        self.model = LEDForConditionalGeneration.from_pretrained(args.primer_path)
+        # self.tokenizer = AutoTokenizer.from_pretrained(args.primer_path)
+        # self.model = LEDForConditionalGeneration.from_pretrained(args.primer_path)
+        self.tokenizer = AutoTokenizer.from_pretrained('allenai/PRIMERA')
+        config = LEDConfig.from_pretrained('allenai/PRIMERA')
+        self.model = LEDForConditionalGeneration.from_pretrained(
+                    'allenai/PRIMERA', config=config)
+        device = torch.device("cuda:0")
+        self.model = self.model.to(device)
+
         self.model.gradient_checkpointing_enable()
         # if args.debug_mode:
         #     pdb.set_trace()
@@ -75,7 +83,8 @@ class PRIMERSummarizer(pl.LightningModule):
         # get the input ids and attention masks together
         global_attention_mask = torch.zeros_like(input_ids).cuda()
         # put global attention on <s> token
-
+        input_ids = input_ids.cuda()
+        decoder_input_ids = decoder_input_ids.cuda()
         global_attention_mask[:, 0] = 1
         if self.args.join_method == "concat_start_wdoc_global":
             global_attention_mask[input_ids == self.docsep_token_id] = 1
@@ -259,7 +268,10 @@ class PRIMERSummarizer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         for p in self.model.parameters():
             p.requires_grad = False
-        input_ids, output_ids, tgt = batch
+        if self.args.mode=='pretrain':
+            input_ids, output_ids = batch
+        else:
+            input_ids, output_ids, tgt = batch
         loss = self.shared_step(input_ids, output_ids)
         if self.args.compute_rouge:
             result_batch = self.compute_rouge_batch(input_ids, output_ids, tgt)
@@ -377,8 +389,8 @@ def train(args):
         filename="{step}-{vloss:.2f}-{avgr:.4f}",
         save_top_k=args.saveTopK,
         monitor="avgr",
-        mode="max",
-        save_on_train_epoch_end=False,
+        mode="max"#,
+        #save_on_train_epoch_end=False,
     )
 
     # initialize logger
@@ -405,7 +417,8 @@ def train(args):
     # load datasets
     if args.dataset_name in ["multi_news", "multi_x_science_sum"]:
 
-        hf_datasets = load_dataset(args.dataset_name, cache_dir=args.data_path)
+        hf_datasets = load_dataset(args.dataset_name, ignore_verifications=True)
+        #hf_datasets = load_dataset("vietgpt/multi_news_en")
         train_dataloader = get_dataloader_summ(
             args, hf_datasets, model.tokenizer, "train", 0, True
         )
@@ -513,7 +526,7 @@ if __name__ == "__main__":
 
     ########################
     # Gneral
-    parser.add_argument("--gpus", default=0, type=int, help="number of gpus to use")
+    parser.add_argument("--gpus", default=1, type=int, help="number of gpus to use")
     parser.add_argument(
         "--accelerator", default=None, type=str, help="Type of accelerator"
     )
@@ -522,7 +535,7 @@ if __name__ == "__main__":
         "--model_name", default="primer",
     )
     parser.add_argument(
-        "--primer_path", type=str, default="../PRIMER/",
+        "--primer_path", type=str, default="./PRIMER/",
     )
     parser.add_argument("--join_method", type=str, default="concat_start_wdoc_global")
     parser.add_argument(
@@ -550,8 +563,8 @@ if __name__ == "__main__":
         default=None,
     )
 
-    parser.add_argument("--data_path", type=str, default="../dataset/")
-    parser.add_argument("--dataset_name", type=str, default="arxiv")
+    parser.add_argument("--data_path", type=str, default="./datasets/")
+    parser.add_argument("--dataset_name", type=str, default="multi_x_science_sum")
     parser.add_argument(
         "--num_workers",
         type=int,

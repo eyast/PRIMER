@@ -27,10 +27,21 @@ conda install cudatoolkit=10.0
 ```
 pip install git+https://github.com/allenai/longformer.git
 ```
-3. Install requirements to run the summarization scripts and data generation scripts by 
+3. Install GPU ready version of Pytorch by
+```
+conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
+```
+4. Install Chardet by
+```
+pip install chardet
+```
+5. Install requirements to run the summarization scripts and data generation scripts by 
 ```
 pip install -r requirements.txt
 ```
+
+## Test run
+For the time being, disregard the steps below. run `scripts/primer_hf_main.py` to test training on a single GPU.
 
 ## Usage of PRIMERA
 1. Download the pre-trained PRIMERA model [here](https://storage.googleapis.com/primer_summ/PRIMER-large.tar.gz) to `./PRIMERA_model`
